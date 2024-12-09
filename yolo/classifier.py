@@ -2,32 +2,25 @@ from flask import Blueprint, request, jsonify
 from ultralytics import YOLO
 import io
 from PIL import Image
-import ultralytics.engine.results
 
 classifier_service = Blueprint("classifier", __name__)
 
+# Load YOLO model
 model = YOLO("yolo11n-cls.pt")
 
 @classifier_service.route("/classify", methods=["POST"])
 def classify():
-    file = request.files["image"]
-    img_bytes = file.read()
-    img = Image.open(io.BytesIO(img_bytes))
-    
-    results = model(img)
-    
-    formatted_results = []
-    for r in results:
-        name = r.names
-        probs = r.probs
-        top_probs = probs.top5
-        
-        formatted_result = {
-            "top_classes": [
-                {"name": name[top_probs[i]], "probability": float(probs.top5conf[i])}
-                for i in range(5)
-            ]
-        }
-        formatted_results.append(formatted_result)
-    
-    return jsonify(formatted_results)
+    try:
+        file = request.files["image"]
+        img_bytes = file.read()
+        img = Image.open(io.BytesIO(img_bytes))
+
+        results = model.predict(img)
+        formatted_results = [
+            {"class": result.names[int(pred[0])], "confidence": float(pred[1])}
+            for pred in results[0].probs.tolist()
+        ]
+
+        return jsonify({"results": formatted_results}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
